@@ -7,17 +7,16 @@ RUN apk add --no-cache git ca-certificates tzdata
 
 WORKDIR /app
 
-# Copy go.mod + go.sum
+# 1. Copy go.mod and go.sum first
 COPY go.mod go.sum ./
 
-# === FIX: Use go mod tidy first to clean bad entries in go.sum ===
-# This prevents "unknown revision v0.0.1" errors for indirect dependencies
-RUN go mod tidy && go mod download
-
-# Copy source code
+# 2. Copy the full source code
 COPY . .
 
-# Build optimized static binary
+# 3. Now run go mod tidy (after source is present) + download
+RUN go mod tidy && go mod download
+
+# 4. Build the binary
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags="-s -w" \
     -o /vm-energy-agent ./cmd/agent
