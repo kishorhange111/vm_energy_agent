@@ -73,7 +73,7 @@ main.go
 
 ```bash
 git clone <repo-url>
-cd monitoring_agent
+cd vm_energy_agent
 
 cp .env.example .env
 make docker-run
