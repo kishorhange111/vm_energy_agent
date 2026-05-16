@@ -1,0 +1,44 @@
+version: "3.8"
+
+services:
+  vm-energy-agent:
+    build: .
+    container_name: vm-energy-agent
+    ports:
+      - "8080:8080"
+    env_file: .env
+
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./deploy/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ./deploy/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    ports:
+      - "16686:16686"  # UI
+      - "4318:4318"    # OTLP
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+
+volumes:
+  prometheus_data:
+  grafana_data:

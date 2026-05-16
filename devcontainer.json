@@ -1,0 +1,38 @@
+{
+  "name": "VM Energy Agent",
+
+  // Official Microsoft Go devcontainer — includes Go 1.22, git, make
+  "image": "mcr.microsoft.com/devcontainers/go:1.22-bookworm",
+
+  // Forward all three service ports automatically
+  "forwardPorts": [8080, 9090, 3000],
+
+  "portsAttributes": {
+    "8080": { "label": "Agent /metrics",  "onAutoForward": "notify" },
+    "9090": { "label": "Prometheus",       "onAutoForward": "notify" },
+    "3000": { "label": "Grafana",           "onAutoForward": "notify" }
+  },
+
+  // Install Docker-in-Docker so docker compose works inside Codespaces
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+
+  // Run after the container starts: pull deps and build once
+  "postCreateCommand": "make setup && make build",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.go",
+        "ms-azuretools.vscode-docker",
+        "eamodio.gitlens"
+      ],
+      "settings": {
+        "go.toolsManagement.autoUpdate": true,
+        "editor.formatOnSave": true,
+        "[go]": { "editor.defaultFormatter": "golang.go" }
+      }
+    }
+  }
+}
