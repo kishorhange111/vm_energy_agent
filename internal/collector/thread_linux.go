@@ -10,20 +10,12 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"golang.org/x/sys/unix"
 )
 
-// clkTck is the number of clock ticks per second (usually 100, 250 or 1000).
-// We read it at init time using sysconf(_SC_CLK_TCK) for correctness on
-// non-standard kernels.
-var clkTck = func() float64 {
-	ticks, err := unix.Sysconf(unix.SC_CLK_TCK)
-	if err != nil || ticks <= 0 {
-		return 100 // safe fallback
-	}
-	return float64(ticks)
-}()
+// clkTck is the number of clock ticks per second.
+// We use a safe default (100) which works on the vast majority of Linux systems.
+// Dynamic detection was removed to avoid persistent Docker build issues with CGO_ENABLED=0.
+const clkTck = 100.0
 
 // ThreadCollector is a Leaf in the Composite pattern.
 // It reads per-thread CPU time from /proc/<pid>/task/<tid>/stat.
@@ -57,12 +49,9 @@ func (t *ThreadCollector) Collect() (*Metrics, error) {
 	}
 
 	var cpuPct float64
-	// Guard against uint64 underflow on counter resets.
 	if t.initialized && user >= t.prevUser && sys >= t.prevSys {
 		if elapsed := now.Sub(t.prevTime).Seconds(); elapsed > 0 {
 			delta := float64((user - t.prevUser) + (sys - t.prevSys))
-			// jiffies (CLK_TCK from sysconf) → percent. This works correctly
-			// even on kernels compiled with HZ=250 or HZ=1000.
 			cpuPct = (delta / clkTck) / elapsed * 100.0
 		}
 	}
@@ -86,8 +75,6 @@ func readThreadStat(pid, tid int32) (user, sys uint64, err error) {
 	if idx < 0 {
 		return 0, 0, fmt.Errorf("malformed stat: no closing paren in %s", path)
 	}
-	// Fields after ')': state ppid pgrp session tty tpgid flags
-	//                   minflt cminflt majflt cmajflt utime(13) stime(14) ...
 	fields := strings.Fields(string(data[idx+1:]))
 	if len(fields) < 13 {
 		return 0, 0, fmt.Errorf("%s: need >= 13 fields after ')', got %d", path, len(fields))
