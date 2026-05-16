@@ -9,16 +9,15 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
-
-	"golang.org/x/sys/unix"
 )
 
 // clkTck is the number of clock ticks per second (usually 100, 250 or 1000).
 // We read it at init time using sysconf(_SC_CLK_TCK) for correctness on
 // non-standard kernels.
 var clkTck = func() float64 {
-	ticks, err := unix.Sysconf(unix.SC_CLK_TCK)
+	ticks, err := syscall.Sysconf(syscall.SC_CLK_TCK)
 	if err != nil || ticks <= 0 {
 		return 100 // safe fallback
 	}

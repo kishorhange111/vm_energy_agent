@@ -17,7 +17,7 @@ COPY . .
 # Build optimized static binary
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags="-s -w" \
-    -o /vm-energy-agent ./cmd/...
+    -o /vm-energy-agent ./cmd/agent
 
 # ============================================
 # Stage 2: Minimal final image
