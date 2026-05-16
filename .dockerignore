@@ -1,4 +1,30 @@
+# Git
 .git
 .gitignore
-*.log
+
+# Docker
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# Build output
+vm-energy-agent
+*.exe
 bin/
+
+# IDE
+.idea
+.vscode
+
+# Tests
+*_test.go
+coverage*
+
+# Environment
+.env
+.env.*
+
+# Misc
+README.md
+Makefile
+LICENSE
