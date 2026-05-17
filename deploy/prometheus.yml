@@ -1,8 +1,10 @@
 global:
-  scrape_interval: 5s
+  scrape_interval: 15s        # scrape less often — Prometheus aggregates
+  evaluation_interval: 15s
 
 scrape_configs:
   - job_name: vm-energy-agent
+    scrape_interval: 5s       # override just for this job if you want 5s
     static_configs:
       - targets:
           - vm-energy-agent:8080

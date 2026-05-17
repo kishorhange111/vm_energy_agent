@@ -1,151 +1,110 @@
 {
   "title": "VM Energy Agent",
   "schemaVersion": 38,
-  "version": 2,
+  "version": 3,
   "panels": [
     {
       "id": 1,
       "title": "VM — CPU %",
       "type": "timeseries",
-      "targets": [
-        {
-          "expr": "vm_cpu_usage{level=\"vm\"}"
-        }
-      ],
-      "gridPos": {
-        "x": 0,
-        "y": 0,
-        "w": 12,
-        "h": 8
-      }
+      "targets": [{ "expr": "vm_cpu_usage{level=\"vm\"}" }],
+      "fieldConfig": {
+        "defaults": { "unit": "percent", "min": 0, "max": 100 }
+      },
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 }
     },
     {
       "id": 2,
-      "title": "VM — Memory (bytes)",
+      "title": "VM — Memory",
       "type": "timeseries",
-      "targets": [
-        {
-          "expr": "vm_memory_usage_bytes{level=\"vm\"}"
-        }
-      ],
-      "gridPos": {
-        "x": 12,
-        "y": 0,
-        "w": 12,
-        "h": 8
-      }
+      "targets": [{ "expr": "vm_memory_usage_bytes{level=\"vm\"}" }],
+      "fieldConfig": {
+        "defaults": { "unit": "bytes", "min": 0 }
+      },
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 }
     },
     {
       "id": 3,
       "title": "Disk IO MB/s",
       "type": "timeseries",
-      "targets": [
-        {
-          "expr": "vm_disk_io_mb_per_sec{level=\"vm\"}"
-        }
-      ],
-      "gridPos": {
-        "x": 0,
-        "y": 8,
-        "w": 12,
-        "h": 8
-      }
+      "targets": [{ "expr": "vm_disk_io_mb_per_sec{level=\"vm\"}" }],
+      "fieldConfig": {
+        "defaults": { "unit": "MBs", "min": 0 }
+      },
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 }
     },
     {
       "id": 4,
-      "title": "Network MB/s (total)",
+      "title": "Network MB/s",
       "type": "timeseries",
       "targets": [
-        {
-          "expr": "vm_network_mb_per_sec{level=\"vm\"}"
-        }
+        { "expr": "vm_network_recv_mb_per_sec{level=\"vm\"}", "legendFormat": "recv" },
+        { "expr": "vm_network_sent_mb_per_sec{level=\"vm\"}", "legendFormat": "sent" }
       ],
-      "gridPos": {
-        "x": 12,
-        "y": 8,
-        "w": 12,
-        "h": 8
-      }
+      "fieldConfig": {
+        "defaults": { "unit": "MBs", "min": 0 }
+      },
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 }
     },
     {
       "id": 5,
-      "title": "Power (watts) — all levels",
+      "title": "Estimated Power (watts)",
       "type": "timeseries",
-      "targets": [
-        {
-          "expr": "vm_power_watts"
-        }
-      ],
-      "gridPos": {
-        "x": 0,
-        "y": 16,
-        "w": 24,
-        "h": 8
-      }
+      "targets": [{ "expr": "vm_power_watts{level=\"vm\"}" }],
+      "fieldConfig": {
+        "defaults": { "unit": "watt", "min": 0, "max": 250 }
+      },
+      "gridPos": { "x": 0, "y": 16, "w": 24, "h": 8 }
     },
     {
       "id": 6,
       "title": "Process — CPU %",
       "type": "timeseries",
-      "targets": [
-        {
-          "expr": "vm_cpu_usage{level=\"process\"}"
-        }
-      ],
-      "gridPos": {
-        "x": 0,
-        "y": 24,
-        "w": 12,
-        "h": 8
-      }
+      "targets": [{ "expr": "vm_cpu_usage{level=\"process\"}" }],
+      "fieldConfig": {
+        "defaults": { "unit": "percent", "min": 0 }
+      },
+      "gridPos": { "x": 0, "y": 24, "w": 12, "h": 8 }
     },
     {
       "id": 7,
       "title": "Thread — CPU %",
       "type": "timeseries",
-      "targets": [
-        {
-          "expr": "vm_cpu_usage{level=\"thread\"}"
-        }
-      ],
-      "gridPos": {
-        "x": 12,
-        "y": 24,
-        "w": 12,
-        "h": 8
-      }
+      "targets": [{ "expr": "vm_cpu_usage{level=\"thread\"}" }],
+      "fieldConfig": {
+        "defaults": { "unit": "percent", "min": 0 }
+      },
+      "gridPos": { "x": 12, "y": 24, "w": 12, "h": 8 }
     },
     {
       "id": 8,
-      "title": "Agent RSS memory (bytes)",
+      "title": "Agent RSS Memory",
       "type": "timeseries",
-      "targets": [
-        {
-          "expr": "process_resident_memory_bytes"
-        }
-      ],
-      "gridPos": {
-        "x": 0,
-        "y": 32,
-        "w": 12,
-        "h": 8
-      }
+      "targets": [{ "expr": "process_resident_memory_bytes" }],
+      "fieldConfig": {
+        "defaults": { "unit": "bytes", "min": 0, "max": 104857600, "thresholds": {
+          "steps": [
+            { "color": "green", "value": null },
+            { "color": "red",   "value": 104857600 }
+          ]
+        }}
+      },
+      "gridPos": { "x": 0, "y": 32, "w": 12, "h": 8 }
     },
     {
       "id": 9,
-      "title": "Agent CPU rate (s/s)",
+      "title": "Agent CPU rate",
       "type": "timeseries",
-      "targets": [
-        {
-          "expr": "rate(process_cpu_seconds_total[1m])"
-        }
-      ],
-      "gridPos": {
-        "x": 12,
-        "y": 32,
-        "w": 12,
-        "h": 8
-      }
+      "targets": [{ "expr": "rate(process_cpu_seconds_total[1m])" }],
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit", "min": 0, "max": 0.02, "thresholds": {
+          "steps": [
+            { "color": "green", "value": null },
+            { "color": "red",   "value": 0.02 }
+          ]
+        }}
+      },
+      "gridPos": { "x": 12, "y": 32, "w": 12, "h": 8 }
     }
   ]
 }
