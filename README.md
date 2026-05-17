@@ -9,11 +9,11 @@ A lightweight, production-oriented Go application that monitors **VMs, Processes
 The VM Energy Agent collects system metrics every 5 seconds and calculates estimated power usage using a configurable linear model. It is designed to be **lightweight** (<2% CPU, <100MB memory) and follows clean software architecture principles.
 
 **Key Goals:**
-- Hierarchical monitoring (VM → Process → Thread)
-- Accurate power estimation
+- Hierarchical monitoring of **all processes** on the host/VM (VM → Process → Thread)
+- Accurate power estimation with proper unit normalization
 - Low resource consumption
 - Full observability (Metrics + Tracing)
-- Cross-platform support (Linux primary, Windows partial)
+- Cross-platform support (Linux primary)
 
 ---
 
@@ -25,7 +25,7 @@ The VM Energy Agent collects system metrics every 5 seconds and calculates estim
 main.go
    └── Agent (Facade)
          ├── VMCollector (Composite Root)          ← host-wide CPU/Mem/Disk/Net
-         │     └── ProcessCollector (ALL processes on VM)
+         │     └── ProcessCollector (ALL processes on the VM)
          │           └── ThreadCollector (per-process threads)
          ├── TreeIterator (BFS Traversal)
          ├── ExportVisitor

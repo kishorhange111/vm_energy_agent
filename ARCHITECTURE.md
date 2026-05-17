@@ -16,6 +16,7 @@ The system follows a **clean, layered architecture** with strong separation of c
                              ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                     Agent (Facade)                          │
+│  - Discovers all processes on the host/VM                   │
 │  - Wires all components                                     │
 │  - Starts collection ticker (every 5s)                      │
 │  - Starts Prometheus HTTP server                            │
@@ -39,7 +40,7 @@ The system follows a **clean, layered architecture** with strong separation of c
 │                  Processing Layer                           │
 │  ExportVisitor                                              │
 │    ├── Collect metrics (via CachedSource)                   │
-│    ├── Estimate Power (via Estimator)                       │
+│    ├── Estimate Power in Watts (via Estimator)              │
 │    └── Export to Prometheus                                 │
 └────────────────────────────┬────────────────────────────────┘
                              │
@@ -59,8 +60,9 @@ The system follows a **clean, layered architecture** with strong separation of c
 - **Separation of Concerns**: Collection, Estimation, and Export are decoupled.
 - **Open/Closed Principle**: New collectors or estimators can be added without modifying existing code.
 - **Performance First**: Heavy use of caching (`CachedSource`) to stay under 2% CPU.
-- **Data Freshness**: Stale data is explicitly marked (`-1`) to avoid wrong power calculations.
-- **Observability by Default**: Tracing and metrics are built-in, not added later.
+- **Data Freshness**: Stale data is explicitly handled to avoid wrong power calculations.
+- **Observability by Default**: Tracing and metrics are built-in.
+- **Correct Units**: Memory is reported in **bytes**, and power is estimated in **watts**.
 
 ---
 
@@ -71,12 +73,13 @@ The system follows a **clean, layered architecture** with strong separation of c
 **Location:** `internal/agent/agent.go`
 
 The `Agent` is the single entry point. It:
-- Discovers **all processes** on the host/VM (and their threads) and builds the full VM → Process → Thread hierarchy
-- Starts a ticker that triggers collection every 5 seconds
-- Starts the Prometheus HTTP server
-- Manages graceful shutdown
+- Discovers **all processes** running on the host/VM and builds the full VM → Process → Thread hierarchy.
+- Starts a ticker that triggers collection every 5 seconds.
+- Starts the Prometheus HTTP server.
+- Manages graceful shutdown.
 
-**Important:** Process and thread metrics now cover workloads running on the VM (not just the agent process itself). The agent's own process additionally receives live thread discovery on every cycle.
+**Important Note**:  
+Process and thread metrics now reflect **actual workloads** on the VM, not just the agent itself. The agent’s own process receives additional dynamic thread discovery on every cycle.
 
 **Why Facade?**  
 External code only needs to call `New()` and `Run()`. All internal wiring is hidden.
@@ -86,9 +89,9 @@ External code only needs to call `New()` and `Run()`. All internal wiring is hid
 ### 3.2 Collection Layer (Composite Pattern)
 
 **Components:**
-- `VMCollector` — host-wide metrics (CPU%, memory%, disk I/O, network)
-- `ProcessCollector` — **every process** on the VM (CPU% + memory%)
-- `ThreadCollector` — threads belonging to each process (CPU%; Linux-accurate)
+- `VMCollector` — Host-wide metrics (CPU%, Memory in **bytes**, Disk I/O, Network)
+- `ProcessCollector` — Per-process CPU and Memory (**bytes**). Manages child threads.
+- `ThreadCollector` — Per-thread CPU usage (accurate on Linux).
 
 All implement the `MetricSource` interface:
 ```go
@@ -101,8 +104,8 @@ type MetricSource interface {
 ```
 
 **Why Composite?**
-- Treats individual objects (threads) and compositions (VMs containing processes) uniformly.
-- Easy to traverse the entire hierarchy.
+- Treats individual objects (threads) and compositions (processes containing threads) uniformly.
+- Easy to traverse the entire hierarchy using the Iterator.
 
 ---
 
@@ -110,12 +113,11 @@ type MetricSource interface {
 
 **Location:** `internal/collector/iterator.go`
 
-`TreeIterator` performs **Breadth-First Search (BFS)** over the tree.
+`TreeIterator` performs **Breadth-First Search (BFS)** over the process tree.
 
 **Why Iterator?**
 - Decouples traversal logic from the node structure.
-- Easy to change traversal strategy (BFS vs DFS) later.
-- Clean `for node := iter.Next(); node != nil; ...` loop in `Agent`.
+- Enables clean iteration: `for node := iter.Next(); node != nil; ...`
 
 ---
 
@@ -124,12 +126,12 @@ type MetricSource interface {
 **Location:** `internal/visitor/export_visitor.go`
 
 `ExportVisitor` is responsible for:
-1. Collecting metrics from each node
-2. Estimating power consumption
+1. Collecting metrics from each node (via `CachedSource`)
+2. Estimating power consumption in **watts**
 3. Updating Prometheus gauges
 
 **Why Visitor?**
-- Adds new behavior (export + estimation) **without modifying** the `MetricSource` structs.
+- Adds new behavior (collection + export + estimation) **without modifying** the `MetricSource` structs.
 - Follows the **Open/Closed Principle**.
 
 ---
@@ -142,12 +144,12 @@ type MetricSource interface {
 
 **Key Behavior:**
 - On success → Cache result
-- On failure + data < 5s old → Return cached data
-- On failure + data > 5s old → Return `-1` (instead of stale data)
+- On failure + fresh data available → Return cached data
+- On failure + stale data → Return error (prevents bad power calculations)
 
 **Why Decorator?**
-- Adds caching behavior transparently.
-- Directly helps achieve the **<2% CPU** target by reducing syscalls.
+- Adds caching transparently.
+- Helps achieve the **<2% CPU** target by reducing expensive syscalls.
 
 ---
 
@@ -155,16 +157,19 @@ type MetricSource interface {
 
 **Location:** `internal/estimator/estimator.go`
 
+The estimator converts resource usage into **watts**:
+
 ```go
-Power = a*CPU + b*Memory + c*Disk + d*Network
+Power (watts) = normalized(CPU, Memory_bytes, Disk, Network)
 ```
 
-- Coefficients are loaded from environment variables.
-- If any metric is `-1` (stale), it returns `0` power.
+- Memory is **normalized** from bytes to a 0–100 score (using a 128GB ceiling).
+- Disk and Network are also normalized.
+- Final value is scaled to a configurable watt ceiling (default: 250W).
 
 **Why Strategy?**
-- Easy to swap estimation algorithms in the future.
-- Coefficients are configurable at runtime.
+- Easy to swap or improve the power model in the future.
+- Coefficients are configurable via environment variables.
 
 ---
 
@@ -172,35 +177,32 @@ Power = a*CPU + b*Memory + c*Disk + d*Network
 
 **Location:** `internal/exporter/exporter.go`
 
-- Exposes `/metrics` endpoint in Prometheus format.
-- Registers custom gauges with rich labels.
-- Auto-instruments HTTP handlers with OpenTelemetry.
+- Exposes `/metrics` in Prometheus format.
+- Registers gauges with rich labels (`instance`, `vm_name`, `level`, `node`).
+- `vm_collection_errors_total` uses reduced labels to avoid high cardinality.
+- HTTP handlers are auto-instrumented with OpenTelemetry.
 
 ---
 
 ### 3.8 Observability Layer
 
-- **Prometheus**: Metrics collection
+- **Prometheus**: Primary metrics system
 - **OpenTelemetry + Jaeger**: Distributed tracing
-- **Grafana**: Visualization
+- **Grafana**: Visualization dashboards
 
-All collection, estimation, and export steps emit traces.
+All major operations (`collection.cycle`, `visit.*`, `estimate.power`) emit traces.
 
 ---
 
-## 4. Data Freshness & Error Handling Strategy
+## 4. Data Freshness & Error Handling
 
-This is one of the most important design decisions:
-
-| Situation                        | Behavior                                      | Reason |
-|----------------------------------|-----------------------------------------------|--------|
-| Collection succeeds              | Cache result                                  | Performance |
-| Collection fails + data < 5s     | Return cached data                            | Stability |
-| Collection fails + data > 5s     | Return `-1`                                   | Avoid misleading old data |
-| Estimator sees `-1`              | Return power = `0`                            | Prevent wrong energy calculations |
-| One node fails                   | Log warning + continue with other nodes       | Resilience |
-
-This design ensures that **stale data does not corrupt power estimation**.
+| Situation                        | Behavior                              | Reason |
+|----------------------------------|---------------------------------------|--------|
+| Collection succeeds              | Cache result                          | Performance |
+| Collection fails + data fresh    | Return cached data                    | Stability |
+| Collection fails + data stale    | Return error (no `-1` pushed)         | Prevent misleading metrics |
+| Estimator sees stale data        | Return `0` watts                      | Avoid wrong power values |
+| One node fails                   | Log + continue with others            | Resilience |
 
 ---
 
@@ -209,29 +211,12 @@ This design ensures that **stale data does not corrupt power estimation**.
 | Platform     | VM Level | Process Level | Thread Level     | Notes |
 |--------------|----------|---------------|------------------|-------|
 | **Linux**    | Full     | Full          | Full (accurate)  | Best support |
-| **Windows**  | Good     | Good          | Limited (CPU=0)  | Uses `gopsutil` |
-| **macOS**    | Good     | Good          | Limited          | Falls back to stub |
+| **Windows**  | Good     | Good          | Limited          | Uses `gopsutil` |
+| **macOS**    | Good     | Good          | Limited          | Fallbacks used |
 
 ---
 
-## 6. Scalability Considerations
-
-**Current Strengths:**
-- Agent is very lightweight.
-- Stateless design.
-- Rich labeling strategy.
-- Standard Prometheus + OpenTelemetry integration.
-
-**Future Needs for Large Scale (10k+ VMs):**
-- Kubernetes DaemonSet + PodMonitor
-- Remote write to scalable TSDB (VictoriaMetrics / Thanos)
-- Hierarchical Prometheus federation
-- mTLS
-- Record rules for aggregation
-
----
-
-## 7. Summary of Design Patterns
+## 6. Summary of Design Patterns
 
 | Pattern      | Location                        | Benefit |
 |--------------|----------------------------------|--------|
@@ -240,8 +225,8 @@ This design ensures that **stale data does not corrupt power estimation**.
 | **Visitor**  | `ExportVisitor`                  | Add behavior without modifying nodes |
 | **Iterator** | `TreeIterator`                   | Clean, decoupled traversal |
 | **Decorator**| `CachedSource`                   | Transparent caching + staleness handling |
-| **Strategy** | `Estimator`                      | Swappable power model |
+| **Strategy** | `Estimator`                      | Swappable & configurable power model |
 
 ---
 
-This architecture prioritizes **correctness** (fresh data), **performance** (caching), **maintainability** (patterns), and **observability** (tracing + metrics).
+This architecture prioritizes **correctness** (proper units, fresh data), **performance** (caching), **maintainability** (design patterns), and **observability** (tracing + metrics).
