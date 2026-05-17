@@ -1,8 +1,10 @@
+apiVersion: 1
+
 providers:
   - name: default
     type: file
-    updateIntervalSeconds: 10   # picks up dashboard.json changes without restart
     disableDeletion: false
-    allowUiUpdates: true        # lets you edit panels live during demo
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
     options:
       path: /var/lib/grafana/dashboards
