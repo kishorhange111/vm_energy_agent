@@ -31,7 +31,7 @@ func TestExporter_HealthEndpoint(t *testing.T) {
 func TestExporter_UpdateNode_NoPanic(t *testing.T) {
 	exp := exporter.NewExporter()
 	cfg := config.Config{InstanceName: "test", VMName: "vm-test"}
-	m := &collector.Metrics{CPU: 45, Memory: 60, Disk: 10, Network: 2}
+	m := &collector.Metrics{CPU: 45, Memory: 4 * 1024 * 1024 * 1024, Disk: 10, Network: 2} // 4GB realistic bytes
 	exp.UpdateNode("vm",      "vm-test",      m, 36.5, cfg)
 	exp.UpdateNode("process", "agent/pid:1",  m, 25.0, cfg)
 	exp.UpdateNode("thread",  "agent/tid:2",  m, 22.5, cfg)

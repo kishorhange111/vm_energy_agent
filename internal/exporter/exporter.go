@@ -25,6 +25,8 @@ type Exporter struct {
 	memGauge               *prometheus.GaugeVec
 	diskGauge              *prometheus.GaugeVec
 	netGauge               *prometheus.GaugeVec
+	netRecvGauge           *prometheus.GaugeVec
+	netSentGauge           *prometheus.GaugeVec
 	powerGauge             *prometheus.GaugeVec
 	collectionErrorCounter *prometheus.CounterVec
 }
@@ -39,15 +41,21 @@ func NewExporter() *Exporter {
 	)
 
 	labels := []string{"instance", "vm_name", "level", "node"}
+	// Error counter uses fewer labels to avoid high cardinality from "node"
+	// (especially thread nodes that include PIDs, which change on restart).
+	errorLabels := []string{"instance", "vm_name", "level"}
+
 	e := &Exporter{
 		registry:   reg,
 		cpuGauge:   newGaugeVec(reg, "vm_cpu_usage",          "CPU usage %",          labels),
-		memGauge:   newGaugeVec(reg, "vm_memory_usage",       "Memory usage %",       labels),
-		diskGauge:  newGaugeVec(reg, "vm_disk_io_mb_per_sec", "Disk IO MB/s",         labels),
-		netGauge:   newGaugeVec(reg, "vm_network_mb_per_sec", "Network IO MB/s",      labels),
-		powerGauge: newGaugeVec(reg, "vm_power_score",        "Estimated power score (0-100, dimensionless)", labels),
-		// New: allows alerting on repeated collection failures
-		collectionErrorCounter: newCounterVec(reg, "vm_collection_errors_total", "Total collection failures", labels),
+		memGauge:   newGaugeVec(reg, "vm_memory_usage_bytes", "Memory used in bytes", labels),
+		diskGauge:    newGaugeVec(reg, "vm_disk_io_mb_per_sec", "Disk IO MB/s",         labels),
+		netGauge:     newGaugeVec(reg, "vm_network_mb_per_sec", "Network IO MB/s (total)", labels),
+		netRecvGauge: newGaugeVec(reg, "vm_network_recv_mb_per_sec", "Network receive MB/s", labels),
+		netSentGauge: newGaugeVec(reg, "vm_network_sent_mb_per_sec", "Network send MB/s", labels),
+		powerGauge:   newGaugeVec(reg, "vm_power_watts", "Estimated power consumption in watts", labels),
+		// Error counter intentionally omits "node" to prevent cardinality leaks on restarts.
+		collectionErrorCounter: newCounterVec(reg, "vm_collection_errors_total", "Total collection failures", errorLabels),
 	}
 	return e
 }
@@ -77,16 +85,19 @@ func (e *Exporter) UpdateNode(level, node string, m *collector.Metrics, power fl
 	e.memGauge.With(l).Set(m.Memory)
 	e.diskGauge.With(l).Set(m.Disk)
 	e.netGauge.With(l).Set(m.Network)
+	e.netRecvGauge.With(l).Set(m.NetworkRecv)
+	e.netSentGauge.With(l).Set(m.NetworkSent)
 	e.powerGauge.With(l).Set(power)
 }
 
 // IncCollectionError increments vm_collection_errors_total for alerting.
-func (e *Exporter) IncCollectionError(level, node string, cfg config.Config) {
+// Note: We deliberately do **not** include the "node" label here to avoid
+// high cardinality (thread nodes contain PIDs that change on every restart).
+func (e *Exporter) IncCollectionError(level string, cfg config.Config) {
 	l := prometheus.Labels{
 		"instance": cfg.InstanceName,
 		"vm_name":  cfg.VMName,
 		"level":    level,
-		"node":     node,
 	}
 	e.collectionErrorCounter.With(l).Inc()
 }

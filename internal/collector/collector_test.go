@@ -85,6 +85,8 @@ func TestVMCollector_AllMetrics(t *testing.T) {
 	_ = m.Memory
 	_ = m.Disk
 	_ = m.Network
+	_ = m.NetworkRecv
+	_ = m.NetworkSent
 }
 
 func TestNewCachedSource(t *testing.T) {

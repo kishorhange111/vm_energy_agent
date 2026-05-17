@@ -80,12 +80,12 @@ func (v *ExportVisitor) Visit(node collector.MetricSource) {
 			// Stale data from CachedSource — do NOT push -1 values to Prometheus.
 			// Just count it as a collection error for alerting.
 			slog.Debug(level + " collect skipped (stale data)")
-			v.exp.IncCollectionError(level, node.Name(), v.cfg)
+			v.exp.IncCollectionError(level, v.cfg)
 			return
 		}
 		slog.Warn(level+" collect failed", "name", node.Name(), "err", err)
 		span.RecordError(err)
-		v.exp.IncCollectionError(level, node.Name(), v.cfg)
+		v.exp.IncCollectionError(level, v.cfg)
 		return
 	}
 	v.exp.UpdateNode(level, node.Name(), m, v.est.Estimate(parentCtx, m), v.cfg)

@@ -21,11 +21,11 @@
     },
     {
       "id": 2,
-      "title": "VM — Memory %",
+      "title": "VM — Memory (bytes)",
       "type": "timeseries",
       "targets": [
         {
-          "expr": "vm_memory_usage{level=\"vm\"}"
+          "expr": "vm_memory_usage_bytes{level=\"vm\"}"
         }
       ],
       "gridPos": {
@@ -53,7 +53,7 @@
     },
     {
       "id": 4,
-      "title": "Network MB/s",
+      "title": "Network MB/s (total)",
       "type": "timeseries",
       "targets": [
         {
@@ -69,11 +69,11 @@
     },
     {
       "id": 5,
-      "title": "Power Score (all levels)",
+      "title": "Power (watts) — all levels",
       "type": "timeseries",
       "targets": [
         {
-          "expr": "vm_power_score"
+          "expr": "vm_power_watts"
         }
       ],
       "gridPos": {

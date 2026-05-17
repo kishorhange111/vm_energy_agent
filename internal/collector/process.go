@@ -125,9 +125,8 @@ func (p *ProcessCollector) Collect() (*Metrics, error) {
 				total = vmStat.Total
 			}
 		}
-		if total > 0 {
-			m.Memory = float64(memInfo.RSS) / float64(total) * 100.0
-		}
+		m.Memory = float64(memInfo.RSS) // bytes (consistent unit with VM level)
+
 	}
 	return m, nil
 }

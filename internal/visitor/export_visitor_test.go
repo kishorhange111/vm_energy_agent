@@ -30,7 +30,7 @@ func newVisitor(t *testing.T) *visitor.ExportVisitor {
 func TestExportVisitor_VisitVM(t *testing.T) {
 	v := newVisitor(t)
 	vm := collector.NewVMCollector("test-vm")
-	v.VisitVM(vm) // should not panic
+	v.Visit(vm) // Fixed: was VisitVM
 }
 
 func TestExportVisitor_VisitProcess(t *testing.T) {
@@ -53,18 +53,15 @@ func TestExportVisitor_MultipleVisits(t *testing.T) {
 
 func TestExportVisitor_ErrorHandling(t *testing.T) {
 	v := newVisitor(t)
-	// VM with invalid name should still be handled gracefully
 	vm := collector.NewVMCollector("")
-	v.VisitVM(vm)
+	v.Visit(vm) // Fixed: was VisitVM
 }
+
 func TestExportVisitor_VisitWithZeroMetrics(t *testing.T) {
 	v := newVisitor(t)
 	vm := collector.NewVMCollector("zero-vm")
-
-	// Even with zero metrics, it should not crash
-	v.VisitVM(vm)
+	v.Visit(vm) // Fixed: was VisitVM
 }
-
 
 func TestExportVisitor_Creation(t *testing.T) {
 	cfg := config.Config{InstanceName: "test", VMName: "vm"}
@@ -81,5 +78,5 @@ func TestExportVisitor_Creation(t *testing.T) {
 func TestExportVisitor_VisitZeroValue(t *testing.T) {
 	v := newVisitor(t)
 	vm := collector.NewVMCollector("")
-	v.Visit(vm) // should handle empty name gracefully
+	v.Visit(vm)
 }

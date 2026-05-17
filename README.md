@@ -24,16 +24,20 @@ The VM Energy Agent collects system metrics every 5 seconds and calculates estim
 ```
 main.go
    └── Agent (Facade)
-         ├── VMCollector (Composite Root)
-         │     └── ProcessCollector
-         │           └── ThreadCollector
+         ├── VMCollector (Composite Root)          ← host-wide CPU/Mem/Disk/Net
+         │     └── ProcessCollector (ALL processes on VM)
+         │           └── ThreadCollector (per-process threads)
          ├── TreeIterator (BFS Traversal)
          ├── ExportVisitor
-         │     ├── Collect metrics
+         │     ├── Collect metrics (via CachedSource)
          │     ├── Estimate Power (Strategy)
          │     └── Export to Prometheus
          └── OpenTelemetry Tracing
 ```
+
+**Process/Thread coverage**: The agent discovers **every process** on the host/VM at startup
+and snapshots their threads. The agent's own process additionally gets dynamic thread
+discovery on every collection cycle (new threads spawned by the agent are picked up live).
 
 ### Component Breakdown
 
@@ -114,9 +118,9 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
 ## 📊 Observability
 
 ### Prometheus Metrics
-- `vm_cpu_usage`, `vm_memory_usage`
-- `vm_disk_io_mb_per_sec`, `vm_network_mb_per_sec`
-- `vm_power_score`
+- `vm_cpu_usage`, `vm_memory_usage_bytes` (bytes)
+- `vm_disk_io_mb_per_sec`, `vm_network_mb_per_sec` (total), `vm_network_recv_mb_per_sec`, `vm_network_sent_mb_per_sec`
+- `vm_power_watts` (estimated power in watts)
 
 Labels: `instance`, `vm_name`, `level`, `node`
 

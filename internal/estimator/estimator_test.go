@@ -14,16 +14,17 @@ func cfg(cpu, mem, disk, net float64) config.Config {
 
 func TestEstimate_CPUOnly(t *testing.T) {
 	est := estimator.NewEstimator(cfg(0.5, 0.3, 0.1, 0.1))
-	if got := est.Estimate(nil, &collector.Metrics{CPU: 80}); got != 40.0 {
-		t.Errorf("got %.4f, want 40.0", got)
+	// 80% CPU with coeff 0.5 → score 40 → 100 watts (40/100 * 250)
+	if got := est.Estimate(nil, &collector.Metrics{CPU: 80}); got != 100.0 {
+		t.Errorf("got %.4f, want 100.0", got)
 	}
 }
 
 func TestEstimate_DiskClamped(t *testing.T) {
 	est := estimator.NewEstimator(cfg(0, 0, 1.0, 0))
-	// 5000 MB/s exceeds ceiling → normalised to 100
-	if got := est.Estimate(nil, &collector.Metrics{Disk: 5000}); got != 100.0 {
-		t.Errorf("got %.4f, want 100.0", got)
+	// 5000 MB/s exceeds ceiling → score 100 → 250 watts
+	if got := est.Estimate(nil, &collector.Metrics{Disk: 5000}); got != 250.0 {
+		t.Errorf("got %.4f, want 250.0", got)
 	}
 }
 
@@ -36,8 +37,14 @@ func TestEstimate_AllZero(t *testing.T) {
 
 func TestEstimate_FullLoad(t *testing.T) {
 	est := estimator.NewEstimator(cfg(0.5, 0.3, 0.1, 0.1))
-	got := est.Estimate(nil, &collector.Metrics{CPU: 100, Memory: 100, Disk: 1000, Network: 1000})
-	if got != 100.0 {
-		t.Errorf("got %.4f, want 100.0", got)
+	// Full load across all resources (Memory = 128GB = maxMemBytes) → 250 watts
+	got := est.Estimate(nil, &collector.Metrics{
+		CPU:     100,
+		Memory:  128.0 * 1024 * 1024 * 1024, // full 128GB ceiling
+		Disk:    1000,
+		Network: 1000,
+	})
+	if got != 250.0 {
+		t.Errorf("got %.4f, want 250.0", got)
 	}
 }

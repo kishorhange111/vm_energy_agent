@@ -10,7 +10,7 @@ type Config struct {
 	Port         string
 	InstanceName string
 	VMName       string
-	// Power model coefficients (Strategy pattern — swappable without recompile)
+	// Power model coefficients (Strategy pattern  swappable without recompile)
 	CPUCoeff     float64
 	MemoryCoeff  float64
 	DiskCoeff    float64
@@ -30,7 +30,9 @@ func Load() Config {
 }
 
 func getEnv(key, fallback string) string {
-	if v := os.Getenv(key); v != "" { return v }
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
 	return fallback
 }
 

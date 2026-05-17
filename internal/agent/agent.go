@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/shirou/gopsutil/v3/mem"
+	"github.com/shirou/gopsutil/v3/process"
 	"github.com/vm-energy-agent/internal/collector"
 	"github.com/vm-energy-agent/internal/config"
 	"github.com/vm-energy-agent/internal/estimator"
@@ -35,29 +36,61 @@ type Agent struct {
 	totalSystemMemory atomic.Uint64
 }
 
-// New constructs the agent, discovers the local process tree,
+// New constructs the agent, discovers ALL processes on the host/VM (plus their threads),
 // and wires the composite hierarchy: VM → Process → Threads.
+// Only the agent's own process gets dynamic thread refresh on every cycle.
 func New(cfg config.Config) *Agent {
 	vmRaw := collector.NewVMCollector(cfg.VMName)
 
-	// Monitor the agent's own process and its OS threads.
-	// We keep the raw *ProcessCollector so we can call refreshThreads() later.
+	// Discover ALL running processes on the host/VM so that level=process and level=thread
+	// metrics reflect actual workloads, not just the agent itself.
+	// We still specially track the agent's own process (selfProc) for dynamic thread refresh
+	// in collect() cycles. Threads for other processes are snapshotted once at startup.
 	var selfProc *collector.ProcessCollector
 	self := int32(os.Getpid())
-	if procRaw, err := collector.NewProcess(self); err == nil {
-		selfProc = procRaw
-		procRaw.SetThreadCacheTTL(5 * time.Second) // enable caching for dynamically discovered threads too
 
-		if tids, err := procRaw.ThreadIDs(); err == nil {
-			for _, tid := range tids {
-				threadRaw := collector.NewThread(self, tid, procRaw.ShortName())
-				thread := collector.NewCachedSource(threadRaw, 5*time.Second)
-				procRaw.AddThread(thread, tid)
+	allProcs, err := process.Processes()
+	if err != nil {
+		slog.Warn("failed to list processes, falling back to agent self only", "err", err)
+		// Fallback: at least monitor ourselves
+		if procRaw, err := collector.NewProcess(self); err == nil {
+			selfProc = procRaw
+			procRaw.SetThreadCacheTTL(5 * time.Second)
+			if tids, err := procRaw.ThreadIDs(); err == nil {
+				for _, tid := range tids {
+					threadRaw := collector.NewThread(self, tid, procRaw.ShortName())
+					thread := collector.NewCachedSource(threadRaw, 5*time.Second)
+					procRaw.AddThread(thread, tid)
+				}
+			}
+			proc := collector.NewCachedSource(procRaw, 5*time.Second)
+			vmRaw.AddProcess(proc)
+		}
+	} else {
+		for _, p := range allProcs {
+			pid := p.Pid
+			procRaw, err := collector.NewProcess(pid)
+			if err != nil {
+				continue // skip processes we can't inspect (zombies, permission, etc.)
+			}
+			procRaw.SetThreadCacheTTL(5 * time.Second)
+
+			// Snapshot threads at startup for every process
+			if tids, err := procRaw.ThreadIDs(); err == nil {
+				for _, tid := range tids {
+					threadRaw := collector.NewThread(pid, tid, procRaw.ShortName())
+					thread := collector.NewCachedSource(threadRaw, 5*time.Second)
+					procRaw.AddThread(thread, tid)
+				}
+			}
+
+			proc := collector.NewCachedSource(procRaw, 5*time.Second)
+			vmRaw.AddProcess(proc)
+
+			if pid == self {
+				selfProc = procRaw
 			}
 		}
-		// Wrap the process itself
-		proc := collector.NewCachedSource(procRaw, 5*time.Second)
-		vmRaw.AddProcess(proc)
 	}
 
 	// Wrap the VM root so top-level metrics (CPU/Mem/Disk/Net) are cached
@@ -106,8 +139,10 @@ func (a *Agent) collect(ctx context.Context) {
 		a.selfProc.RefreshThreads()
 	}
 
-	// Refresh total system memory once per cycle (cheap) and inject into
-	// monitored processes so they don't call mem.VirtualMemory() themselves.
+	// Refresh total system memory once per cycle (cheap).
+	// We only inject it into selfProc (the agent's own process) as an optimization.
+	// All other processes fall back to calling mem.VirtualMemory() inside their
+	// Collect() when totalSystemMemory == 0. This is acceptable for an MVP.
 	if vmStat, err := mem.VirtualMemory(); err == nil && vmStat.Total > 0 {
 		a.totalSystemMemory.Store(vmStat.Total)
 	}

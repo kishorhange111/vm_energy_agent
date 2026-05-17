@@ -5,10 +5,12 @@ package collector
 
 // Metrics holds resource usage at any granularity level: thread, process, or VM.
 type Metrics struct {
-	CPU     float64 // percentage 0–100
-	Memory  float64 // percentage 0–100
-	Disk    float64 // MB/s  (meaningful at VM level)
-	Network float64 // MB/s  (meaningful at VM level)
+	CPU         float64 // percentage 0–100
+	Memory      float64 // bytes (VM) or % (process) — see collectors for details
+	Disk        float64 // MB/s  (meaningful at VM level)
+	Network     float64 // MB/s total (recv+sent) — kept for power estimation
+	NetworkRecv float64 // MB/s (VM level only)
+	NetworkSent float64 // MB/s (VM level only)
 }
 
 // Visitor is declared here (not in the visitor package) to break the import cycle.

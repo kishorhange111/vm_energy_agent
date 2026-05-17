@@ -71,10 +71,12 @@ The system follows a **clean, layered architecture** with strong separation of c
 **Location:** `internal/agent/agent.go`
 
 The `Agent` is the single entry point. It:
-- Creates the VM → Process → Thread hierarchy
+- Discovers **all processes** on the host/VM (and their threads) and builds the full VM → Process → Thread hierarchy
 - Starts a ticker that triggers collection every 5 seconds
 - Starts the Prometheus HTTP server
 - Manages graceful shutdown
+
+**Important:** Process and thread metrics now cover workloads running on the VM (not just the agent process itself). The agent's own process additionally receives live thread discovery on every cycle.
 
 **Why Facade?**  
 External code only needs to call `New()` and `Run()`. All internal wiring is hidden.
@@ -84,9 +86,9 @@ External code only needs to call `New()` and `Run()`. All internal wiring is hid
 ### 3.2 Collection Layer (Composite Pattern)
 
 **Components:**
-- `VMCollector`
-- `ProcessCollector`
-- `ThreadCollector`
+- `VMCollector` — host-wide metrics (CPU%, memory%, disk I/O, network)
+- `ProcessCollector` — **every process** on the VM (CPU% + memory%)
+- `ThreadCollector` — threads belonging to each process (CPU%; Linux-accurate)
 
 All implement the `MetricSource` interface:
 ```go
